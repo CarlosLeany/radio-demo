@@ -1,4 +1,5 @@
 
+import 'dart:async';
 import 'package:mobx/mobx.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:audio_session/audio_session.dart';
@@ -20,6 +21,9 @@ abstract class RadioStoreBase with Store {
   RadioStation? currentStation;
 
   @observable
+  RadioStation? selectedStation;
+
+  @observable
   ProcessingState processingState = ProcessingState.idle;
 
   @observable
@@ -28,10 +32,24 @@ abstract class RadioStoreBase with Store {
   @observable
   String? errorMessage;
 
+  // Timers para debounce
+  Timer? _playStationDebounceTimer;
+  Timer? _nextStationDebounceTimer;
+  Timer? _previousStationDebounceTimer;
+
   @computed
   String? get currentUrl {
     try {
       return currentStation?.url;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  @computed
+  String? get selectedUrl {
+    try {
+      return selectedStation?.url;
     } catch (e) {
       return null;
     }
@@ -67,30 +85,42 @@ abstract class RadioStoreBase with Store {
     try {
       errorMessage = null;
       
-      // Sempre para a rádio atual antes de trocar
-      if (isPlaying) {
-        await player.stop();
-      }
-      
-      // Sempre configura a nova fonte, mesmo se for a mesma rádio
+      // Atualiza tanto a estação atual quanto a selecionada
       currentStation = station;
+      selectedStation = station;
 
       // Alguns servidores gostam de um User-Agent "real"
       final src = AudioSource.uri(
         Uri.parse(station.url),
         headers: const {
           'User-Agent': 'FlutterRadio/1.0 (just_audio)',
-          // Solicita ICY metadata (se disponível)
           'Icy-MetaData': '1',
         },
       );
 
       await player.setAudioSource(src, preload: true);
+      
+      // Para a estação anterior apenas quando a nova estiver pronta
+      if (isPlaying) {
+        await player.stop();
+      }
+      
       await player.play();
     } catch (e) {
       errorMessage = 'Erro ao tocar ${station.name}: $e';
       rethrow;
     }
+  }
+
+  // Método com debounce para playStation
+  void playStationDebounced(RadioStation station) {
+    // Atualiza imediatamente a estação selecionada para mostrar na UI
+    selectedStation = station;
+    
+    _playStationDebounceTimer?.cancel();
+    _playStationDebounceTimer = Timer(const Duration(milliseconds: 500), () {
+      playStation(station);
+    });
   }
 
   @action
@@ -167,7 +197,59 @@ abstract class RadioStoreBase with Store {
     await playStation(stations[previousIndex]);
   }
 
+  // Métodos com debounce para navegação
+  void nextStationDebounced() {
+    final stations = RadioStations.stations;
+    if (stations.isEmpty) return;
+    
+    // Atualiza imediatamente a estação selecionada para mostrar na UI
+    int currentIndex = 0;
+    if (selectedStation != null) {
+      currentIndex = stations.indexWhere((s) => s.id == selectedStation!.id);
+      if (currentIndex == -1) currentIndex = 0;
+    } else if (currentStation != null) {
+      currentIndex = stations.indexWhere((s) => s.id == currentStation!.id);
+      if (currentIndex == -1) currentIndex = 0;
+    }
+    
+    int nextIndex = (currentIndex + 1) % stations.length;
+    selectedStation = stations[nextIndex];
+    
+    _nextStationDebounceTimer?.cancel();
+    _nextStationDebounceTimer = Timer(const Duration(milliseconds: 500), () {
+      playStation(stations[nextIndex]);
+    });
+  }
+
+  void previousStationDebounced() {
+    final stations = RadioStations.stations;
+    if (stations.isEmpty) return;
+    
+    // Atualiza imediatamente a estação selecionada para mostrar na UI
+    int currentIndex = 0;
+    if (selectedStation != null) {
+      currentIndex = stations.indexWhere((s) => s.id == selectedStation!.id);
+      if (currentIndex == -1) currentIndex = 0;
+    } else if (currentStation != null) {
+      currentIndex = stations.indexWhere((s) => s.id == currentStation!.id);
+      if (currentIndex == -1) currentIndex = 0;
+    }
+    
+    int previousIndex = (currentIndex - 1 + stations.length) % stations.length;
+    selectedStation = stations[previousIndex];
+    
+    _previousStationDebounceTimer?.cancel();
+    _previousStationDebounceTimer = Timer(const Duration(milliseconds: 500), () {
+      playStation(stations[previousIndex]);
+    });
+  }
+
   Future<void> dispose() async {
+    // Cancela todos os timers de debounce
+    _playStationDebounceTimer?.cancel();
+    _nextStationDebounceTimer?.cancel();
+    _previousStationDebounceTimer?.cancel();
+    
     await player.dispose();
   }
 }

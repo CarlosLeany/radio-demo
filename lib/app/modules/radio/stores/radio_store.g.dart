@@ -16,6 +16,13 @@ mixin _$RadioStore on RadioStoreBase, Store {
     () => super.currentUrl,
     name: 'RadioStoreBase.currentUrl',
   )).value;
+  Computed<String?>? _$selectedUrlComputed;
+
+  @override
+  String? get selectedUrl => (_$selectedUrlComputed ??= Computed<String?>(
+    () => super.selectedUrl,
+    name: 'RadioStoreBase.selectedUrl',
+  )).value;
 
   late final _$isPlayingAtom = Atom(
     name: 'RadioStoreBase.isPlaying',
@@ -50,6 +57,24 @@ mixin _$RadioStore on RadioStoreBase, Store {
   set currentStation(RadioStation? value) {
     _$currentStationAtom.reportWrite(value, super.currentStation, () {
       super.currentStation = value;
+    });
+  }
+
+  late final _$selectedStationAtom = Atom(
+    name: 'RadioStoreBase.selectedStation',
+    context: context,
+  );
+
+  @override
+  RadioStation? get selectedStation {
+    _$selectedStationAtom.reportRead();
+    return super.selectedStation;
+  }
+
+  @override
+  set selectedStation(RadioStation? value) {
+    _$selectedStationAtom.reportWrite(value, super.selectedStation, () {
+      super.selectedStation = value;
     });
   }
 
@@ -199,10 +224,12 @@ mixin _$RadioStore on RadioStoreBase, Store {
     return '''
 isPlaying: ${isPlaying},
 currentStation: ${currentStation},
+selectedStation: ${selectedStation},
 processingState: ${processingState},
 lastPlayerState: ${lastPlayerState},
 errorMessage: ${errorMessage},
-currentUrl: ${currentUrl}
+currentUrl: ${currentUrl},
+selectedUrl: ${selectedUrl}
     ''';
   }
 }

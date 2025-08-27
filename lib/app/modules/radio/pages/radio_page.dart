@@ -31,6 +31,7 @@ class _RadioPageState extends State<RadioPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('Melhores Rádios')),
       body: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Observer(
@@ -42,6 +43,24 @@ class _RadioPageState extends State<RadioPage> {
               return Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
+                // Botões de navegação no início
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: store.previousStationDebounced,
+                      icon: const Icon(Icons.skip_previous),
+                      label: const Text('Anterior'),
+                    ),
+                    const SizedBox(width: 16),
+                    ElevatedButton.icon(
+                      onPressed: store.nextStationDebounced,
+                      icon: const Icon(Icons.skip_next),
+                      label: const Text('Próxima'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
                 if (isBuffering) const Padding(
                   padding: EdgeInsets.all(12),
                   child: CircularProgressIndicator(),
@@ -50,39 +69,51 @@ class _RadioPageState extends State<RadioPage> {
                   store.isPlaying ? 'Ao vivo' : 'Parado',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
-                if (store.currentStation != null) ...[
+                if (store.selectedStation != null) ...[
                   const SizedBox(height: 4),
                   Text(
-                    store.currentStation!.name,
+                    store.selectedStation!.name,
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  if (store.currentStation!.description != null) ...[
+                  if (store.selectedStation!.description != null) ...[
                     const SizedBox(height: 2),
                     Text(
-                      store.currentStation!.description!,
+                      store.selectedStation!.description!,
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],
                 ],
-                if (store.errorMessage != null) ...[
-                  const SizedBox(height: 8),
+                const SizedBox(height: 8),
+                // Mostra o status da estação atual vs selecionada
+                if (store.currentStation != store.selectedStation) ...[
                   Container(
-                    padding: const EdgeInsets.all(8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     margin: const EdgeInsets.symmetric(horizontal: 16),
                     decoration: BoxDecoration(
-                      color: Colors.red.shade100,
+                      color: Colors.orange.shade100,
                       borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.orange.shade300),
                     ),
-                    child: Text(
-                      store.errorMessage!,
-                      style: TextStyle(color: Colors.red.shade800),
-                      textAlign: TextAlign.center,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.schedule, size: 16, color: Colors.orange.shade700),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Carregando ${store.selectedStation!.name}...',
+                          style: TextStyle(
+                            color: Colors.orange.shade700,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+                  const SizedBox(height: 8),
                 ],
-                const SizedBox(height: 8),
                 Text(
                   'Estado: ${store.processingState}',
                   style: Theme.of(context).textTheme.bodySmall,
@@ -130,28 +161,6 @@ class _RadioPageState extends State<RadioPage> {
                     ),
                   ],
                 ),
-                                const SizedBox(height: 24),
-                const Text(
-                  'Navegação',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: store.previousStation,
-                      icon: const Icon(Icons.skip_previous),
-                      label: const Text('Anterior'),
-                    ),
-                    const SizedBox(width: 16),
-                    ElevatedButton.icon(
-                      onPressed: store.nextStation,
-                      icon: const Icon(Icons.skip_next),
-                      label: const Text('Próxima'),
-                    ),
-                  ],
-                ),
                 const SizedBox(height: 24),
                 const Text(
                   'Rádios Disponíveis',
@@ -172,7 +181,7 @@ class _RadioPageState extends State<RadioPage> {
                           children: [
                             IconButton(
                               icon: const Icon(Icons.play_arrow),
-                              onPressed: () => store.playStation(station),
+                              onPressed: () => store.playStationDebounced(station),
                               tooltip: 'Tocar ${station.name}',
                             ),
                             IconButton(
@@ -180,8 +189,11 @@ class _RadioPageState extends State<RadioPage> {
                               onPressed: () => store.testStation(station),
                               tooltip: 'Testar ${station.name}',
                             ),
+                            // Mostra o status da estação
                             if (store.currentStation == station && store.isPlaying)
                               const Icon(Icons.volume_up, color: Colors.green)
+                            else if (store.selectedStation == station && store.currentStation != station)
+                              const Icon(Icons.schedule, color: Colors.orange)
                             else if (store.currentStation == station && store.processingState == ProcessingState.loading)
                               const SizedBox(
                                 width: 20,
@@ -192,8 +204,8 @@ class _RadioPageState extends State<RadioPage> {
                               const Icon(Icons.radio),
                           ],
                         ),
-                        selected: store.currentStation == station,
-                        onTap: () => store.playStation(station),
+                        selected: store.selectedStation == station,
+                        onTap: () => store.playStationDebounced(station),
                       ),
                     ),
                   ),
@@ -206,8 +218,6 @@ class _RadioPageState extends State<RadioPage> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.error, size: 64, color: Colors.red),
-                      const SizedBox(height: 16),
                       Text('Erro na interface: $e'),
                       const SizedBox(height: 16),
                       ElevatedButton(
